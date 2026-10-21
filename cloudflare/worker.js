@@ -54,7 +54,12 @@ function decodeEntities(text) {
   });
 }
 export class Portal {
-  constructor(cookies = [], fetcher = fetch) { this.cookies = cookies; this.fetcher = fetcher; this.owner = 'Mi cuenta'; }
+  constructor(cookies = [], fetcher = fetch) {
+    this.cookies = cookies;
+    // Workers fetch rejects a Portal instance as its receiver; invoke it as a standalone function.
+    this.fetcher = (...args) => fetcher(...args);
+    this.owner = 'Mi cuenta';
+  }
   async request(path, body) {
     let url = new URL(path, BASE), method = body ? 'POST' : 'GET';
     for (let hop = 0; hop < 8; hop++) {

@@ -1,5 +1,9 @@
 # Mi asistencia · Sapientia
 
+Sitio publicado: https://mi-asistencia-64e.pages.dev/
+
+Repositorio: https://github.com/jmacpe/mi-asistencia (privado).
+
 App para consultar tus materias en el portal de alumnos de la Universidad Católica de Paraguay y calcular cuántas clases completas podés faltar manteniendo al menos 75% de asistencia. Incluye una versión local con Python y una versión para Cloudflare Pages.
 
 ## Primer uso
@@ -66,12 +70,14 @@ npm ci
 npm test
 npm run build
 npx wrangler login
-npx wrangler pages project create mi-asistencia --production-branch main
+npx wrangler pages project create mi-asistencia --production-branch main --force
 node scripts/set-session-key.mjs mi-asistencia
 npm run deploy
 ```
 
 `SESSION_KEY` es una clave aleatoria de 32 bytes, guardada como secreto de Pages, nunca en Git o JavaScript público. El script la genera y envía por stdin sin imprimirla ni guardarla en disco. Cambiar esta clave cierra todas las sesiones existentes; ejecutarlo solo para configurar o rotar la clave.
+
+El proyecto publicado ya existe y tiene `SESSION_KEY`: para actualizarlo basta con `npm run deploy`. El `--force` de la creación inicial evita que Wrangler convierta el proyecto nuevo a Workers; no se usa para las publicaciones siguientes.
 
 El build genera `dist/` desde una lista de archivos de código y agrega `_worker.js`. No subir la carpeta de trabajo completa. La primera publicación por CLI crea un proyecto Direct Upload; las siguientes se hacen con `npm run deploy`. No se configura despliegue automático desde GitHub. Como alternativa, al crear un proyecto desde GitHub en el panel de Pages, usar `npm run build` como comando, `dist` como salida y configurar `SESSION_KEY` antes de usar el sitio.
 

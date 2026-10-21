@@ -1,0 +1,1 @@
+{"name":"mi-asistencia","private":true,"type":"module","scripts":{"test":"node --test tests/public-model.test.mjs"}}

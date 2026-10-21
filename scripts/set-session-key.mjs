@@ -1,0 +1,10 @@
+import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const project = process.argv[2];
+if (!project || !/^[a-z0-9-]+$/.test(project)) throw new Error('Indicá el nombre del proyecto Pages.');
+const cli = new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url);
+const child = spawn(process.execPath, [fileURLToPath(cli), 'pages', 'secret', 'put', 'SESSION_KEY', '--project-name', project], {stdio:['pipe','inherit','inherit'],windowsHide:true});
+child.stdin.end(randomBytes(32).toString('hex')+'\n');
+child.on('error',()=>{process.exitCode=1;console.error('No se pudo ejecutar Wrangler. Instalá las dependencias primero.');});
+child.on('exit',code=>{process.exitCode=code ?? 1;});

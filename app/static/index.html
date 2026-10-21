@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Mi asistencia · Sapientia</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Ir al contenido</a>
+  <div id="app"><div class="loading">Cargando tu semestre…</div></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="connection">
+    <form id="login-form">
+      <div class="dialog-head"><span class="eyebrow">TU CUENTA DE ALUMNOS</span><button type="button" id="close-dialog" class="icon-button" aria-label="Cerrar">×</button></div>
+      <h2>Iniciar sesión en Sapientia</h2>
+      <p>Importá todas las materias de tu período más reciente. Después podés elegir otro semestre. Cada cuenta conserva sus propios registros.</p>
+      <label>Usuario<input name="username" autocomplete="username" required></label>
+      <label>Contraseña<input name="password" type="password" autocomplete="off" required></label>
+      <p class="small">La contraseña se usa para iniciar sesión y no se guarda. La conexión se pierde al cerrar la app. Tus marcas nunca se envían a Sapientia.</p>
+      <div id="login-error" class="error-text" role="alert"></div>
+      <button class="button primary" id="login-submit" type="submit">Conectar y actualizar</button>
+    </form>
+  </dialog>
+</body>
+</html>

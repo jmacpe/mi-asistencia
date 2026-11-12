@@ -1,8 +1,8 @@
 # Mi asistencia · Sapientia
 
-Sitio publicado: https://mi-asistencia-64e.pages.dev/
+Sitio publicado: https://mi-asistencia-github.pages.dev/
 
-Repositorio: https://github.com/jmacpe/mi-asistencia (privado).
+Repositorio: https://github.com/jmacpe/mi-asistencia (público).
 
 App para consultar tus materias en el portal de alumnos de la Universidad Católica de Paraguay y calcular cuántas clases completas podés faltar manteniendo al menos 75% de asistencia. Incluye una versión local con Python y una versión para Cloudflare Pages.
 
@@ -63,23 +63,26 @@ Las credenciales se transmiten por HTTPS al Worker y a Sapientia, solo para inic
 
 El servidor Python sigue siendo exclusivamente local y no debe exponerse como servidor público compartido.
 
-Para publicar desde este repositorio (Node.js 22 o posterior):
+El proyecto `mi-asistencia-github` está conectado directamente a `jmacpe/mi-asistencia`. Cloudflare publica automáticamente cada push a `main`, usando Node.js 22, `npm run build` y `dist/` como salida. Los despliegues de otras ramas están deshabilitados.
+
+Para verificar y subir un cambio:
 
 ```powershell
 npm ci
 npm test
 npm run build
-npx wrangler login
-npx wrangler pages project create mi-asistencia --production-branch main --force
-node scripts/set-session-key.mjs mi-asistencia
-npm run deploy
+git add <archivos>
+git commit -m "Descripción del cambio"
+git push origin main
 ```
 
-`SESSION_KEY` es una clave aleatoria de 32 bytes, guardada como secreto de Pages, nunca en Git o JavaScript público. El script la genera y envía por stdin sin imprimirla ni guardarla en disco. Cambiar esta clave cierra todas las sesiones existentes; ejecutarlo solo para configurar o rotar la clave.
+La clave `SESSION_KEY` ya está configurada como secreto en Cloudflare. No hace falta recrear el proyecto ni rotar la clave para actualizar. `npm run deploy` sigue disponible como publicación manual de emergencia al mismo proyecto.
 
-El proyecto publicado ya existe y tiene `SESSION_KEY`: para actualizarlo basta con `npm run deploy`. El `--force` de la creación inicial evita que Wrangler convierta el proyecto nuevo a Workers; no se usa para las publicaciones siguientes.
+Para configurar otra instalación, creá un proyecto Pages desde GitHub, elegí el repositorio y configurá los valores de build anteriores. Generá su clave con `node scripts/set-session-key.mjs <nombre-del-proyecto>`. El script genera una clave aleatoria de 32 bytes y la envía como secreto sin imprimirla ni guardarla en disco. Cambiar la clave cierra las sesiones existentes.
 
-El build genera `dist/` desde una lista de archivos de código y agrega `_worker.js`. No subir la carpeta de trabajo completa. La primera publicación por CLI crea un proyecto Direct Upload; las siguientes se hacen con `npm run deploy`. No se configura despliegue automático desde GitHub. Como alternativa, al crear un proyecto desde GitHub en el panel de Pages, usar `npm run build` como comando, `dist` como salida y configurar `SESSION_KEY` antes de usar el sitio.
+El build genera `dist/` desde una lista de archivos de código y agrega `_worker.js`. No subir la carpeta de trabajo completa.
+
+El proyecto anterior de subida manual sigue en https://mi-asistencia-64e.pages.dev/ y no recibe actualizaciones automáticas. Las marcas guardadas en ese sitio permanecen allí: el almacenamiento del navegador no se comparte entre URLs. Conservá un respaldo antes de cambiar de sitio.
 
 Los archivos privados, ZIP, datos reales, registros y semillas están excluidos de Git mediante una lista explícita de rutas permitidas. Las pruebas públicas usan datos ficticios.
 

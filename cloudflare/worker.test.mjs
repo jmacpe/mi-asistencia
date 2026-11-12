@@ -13,15 +13,43 @@ function mockPortal() {
   const calls=[];
   return {calls,fetcher:async(url,options)=> {
     calls.push({url,options});
-    const path = new URL(url).pathname;
-    if (path === '/') return new Response('login',{headers:{'Set-Cookie':'PHPSESSID=sample; Path=/; HttpOnly; Secure'}});
-    if (path === '/login/try') return new Response('var usuario_logueado = "Persona de prueba - Alumno";');
+    const path = new URL(url).pathname.replace(/^\/api/, '');
+    if (path === '/sanctum/csrf-cookie') return new Response(null,{status:204,headers:{'Set-Cookie':'PHPSESSID=sample; Path=/; HttpOnly; Secure'}});
+    if (path === '/login/m-try') return jsonResponse({success:true});
+    if (path === '/personas/perfil/persona') return jsonResponse({datos:{nombre_apellido:'Persona de prueba'}});
     assert.equal(options.headers.Cookie,'PHPSESSID=sample');
-    const records = path.endsWith('current-index') ? [record] : path.endsWith('get-asistencia-por-tipo') ? summary : rows;
+    const records = path.endsWith('/index') ? [record] : path.endsWith('get-asistencia-por-tipo') ? summary : rows;
     return jsonResponse({records,numResults:records.length});
   }};
 }
 const post = (path, body, cookie) => new Request(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});
+
+test('API nueva obtiene CSRF, envía JSON y conserva la cookie de sesión rotada',async()=> {
+  const calls=[];
+  const portal=new Portal([],async(url,options)=> {
+    calls.push(new URL(url).pathname);
+    assert.equal(new URL(url).origin,'https://apialumnos.sapientia.uc.edu.py');
+    assert.equal(options.headers.Origin,'https://alumnos.sapientia.uc.edu.py');
+    if(url.endsWith('/sanctum/csrf-cookie')) {
+      const h=new Headers();
+      h.append('Set-Cookie','XSRF-TOKEN=csrf%3Dvalue; Domain=apialumnos.sapientia.uc.edu.py; Path=/');
+      h.append('Set-Cookie','laravel_session=before; Path=/');
+      return new Response(null,{status:204,headers:h});
+    }
+    if(url.endsWith('/login/m-try')) {
+      assert.equal(options.headers['X-XSRF-TOKEN'],'csrf=value');
+      assert.equal(options.headers['Content-Type'],'application/json');
+      assert.deepEqual(JSON.parse(options.body),{Credenciales:{cedula:'demo',contrasenha:'fake'}});
+      return new Response(JSON.stringify({success:true}),{headers:{'Set-Cookie':'laravel_session=after; Path=/'}});
+    }
+    assert.match(options.headers.Cookie,/laravel_session=after/);
+    if(url.endsWith('/personas/perfil/persona')) return jsonResponse({datos:{nombre_apellido:'Cuenta ficticia'}});
+    return jsonResponse({records:[record],numResults:1});
+  });
+  assert.equal((await portal.login('demo','fake')).length,1);
+  assert.equal(portal.owner,'Cuenta ficticia');
+  assert.deepEqual(calls,['/api/sanctum/csrf-cookie','/api/login/m-try','/api/personas/perfil/persona','/api/cursos/cursos/index']);
+});
 
 test('cifrado autenticado: sesiones vencidas, alteradas y de otra clave no abren',async()=> {
   const session={accountKey:'account',expires:Date.now()+60000,cookies:[]};

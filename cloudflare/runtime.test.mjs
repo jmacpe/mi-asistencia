@@ -16,7 +16,7 @@ test('la consulta usa el fetch nativo de Workers con el contexto correcto', asyn
   const mf = new Miniflare(convertV4MiniflareOptions({
     modules:true, script:source, compatibilityDate:'2026-10-21',
     outboundService(request) {
-      assert.equal(new URL(request.url).origin, 'https://alumnos.sapientia.uc.edu.py');
+      assert.equal(new URL(request.url).origin, 'https://apialumnos.sapientia.uc.edu.py');
       calls++;
       return new Response('portal de prueba');
     }

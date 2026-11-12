@@ -22,7 +22,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
 DATA_FILE = ROOT / 'data' / 'state.json'
-BASE = 'https://alumnos.sapientia.uc.edu.py'
+BASE = 'https://apialumnos.sapientia.uc.edu.py'
 COLORS = ['violet', 'blue', 'teal']
 
 
@@ -65,7 +65,7 @@ class PortalError(Exception):
 
 class SameSiteRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if urllib.parse.urlparse(newurl).hostname != 'alumnos.sapientia.uc.edu.py':
+        if urllib.parse.urlparse(newurl).hostname != 'apialumnos.sapientia.uc.edu.py':
             raise PortalError('El portal redirigió a otro sitio. No se continuó el acceso.')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -74,32 +74,38 @@ class Portal:
     def __init__(self):
         self.catalog = []
         self.owner = 'Mi cuenta'
+        self.cookies = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), SameSiteRedirect())
+            urllib.request.HTTPCookieProcessor(self.cookies), SameSiteRedirect())
 
     def request(self, path, body=None):
-        request = urllib.request.Request(BASE + path, data=body, headers={
+        request = urllib.request.Request(BASE + '/api' + path, data=body, headers={
             'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
-            'User-Agent': 'MiAsistencia/1.0 (personal attendance tracker)'})
+            'User-Agent': 'MiAsistencia/1.0 (personal attendance tracker)',
+            'Origin': 'https://alumnos.sapientia.uc.edu.py', 'Referer': 'https://alumnos.sapientia.uc.edu.py/',
+            'Content-Type': 'application/json',
+            **({'X-XSRF-TOKEN': urllib.parse.unquote(next((c.value for c in self.cookies if c.name == 'XSRF-TOKEN'), ''))} if body else {})})
         with self.opener.open(request, timeout=25) as response:
             return response.read(3_000_000).decode('utf-8-sig')
 
     def login(self, username, password):
-        self.request('/')
-        payload = urllib.parse.urlencode({'Credenciales[cedula]': username,
-                                         'Credenciales[contrasenha]': password, 'preinsc': ''}).encode()
-        page = self.request('/login/try', payload)
-        match = re.search(r'var\s+usuario_logueado\s*=\s*("(?:[^"\\]|\\.)*")', page)
-        if match:
-            try:
-                self.owner = html.unescape(json.loads(match.group(1)).split(' - ')[0]).strip() or 'Mi cuenta'
-            except ValueError:
-                pass
+        self.request('/sanctum/csrf-cookie')
+        payload = json.dumps({'Credenciales': {'cedula': username, 'contrasenha': password}}).encode()
+        try:
+            result = json.loads(self.request('/login/m-try', payload))
+        except urllib.error.HTTPError as error:
+            if error.code in (401, 419, 422):
+                raise PortalError('Revisá tus credenciales o reconectá la sesión de Sapientia.') from None
+            raise
+        if result.get('success') is not True:
+            raise PortalError('Sapientia no confirmó el inicio de sesión.')
+        profile = json.loads(self.request('/personas/perfil/persona'))
+        self.owner = profile.get('datos', {}).get('nombre_apellido') or 'Mi cuenta'
         # Verify through an authenticated read, not merely the HTTP status of the login.
         self.refresh_catalog()
 
     def refresh_catalog(self):
-        self.catalog = self.fetch('/cursos/cursos/current-index', {'p[limit]': 100, 'p[page]': 1})
+        self.catalog = self.fetch('/cursos/cursos/index', {'p[limit]': 100, 'p[page]': 1})
         if any(not r.get('prg_curso_id') for r in self.catalog):
             raise PortalError('No se pudo identificar las materias de esta cuenta.')
 

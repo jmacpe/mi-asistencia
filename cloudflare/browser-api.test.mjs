@@ -36,10 +36,11 @@ test('flujo completo: login, guardar, cambiar cuenta, logout y recuperar sin mez
   globalThis.localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)};
   const env={SESSION_KEY:'c3'.repeat(32)};
   const portalFetch=async url=> {
-    const path=new URL(url).pathname;
-    if(path==='/') return new Response('login',{headers:{'Set-Cookie':'session=example; Path=/'}});
-    if(path==='/login/try') return new Response('var usuario_logueado = "Cuenta ficticia";');
-    const records=path.endsWith('current-index')?[{prg_curso_id:'demo',periodo_lectivo_id:'1',asignatura:'Ejemplo'}]
+    const path=new URL(url).pathname.replace(/^\/api/, '');
+    if(path==='/sanctum/csrf-cookie') return new Response('login',{headers:{'Set-Cookie':'session=example; Path=/'}});
+    if(path==='/login/m-try') return new Response(JSON.stringify({success:true}));
+    if(path==='/personas/perfil/persona') return new Response(JSON.stringify({datos:{nombre_apellido:'Cuenta ficticia'}}));
+    const records=path.endsWith('/index')?[{prg_curso_id:'demo',periodo_lectivo_id:'1',asignatura:'Ejemplo'}]
       :path.endsWith('get-asistencia-por-tipo')?[{tipo_clase:'GLOBAL',cnt_horas_catedras:'2',porc_asistencia:'100'}]
       :[{asis_clase_id:'a',fecha:'2026-10-05',cnt_horas_catedras:'2',cnt_horas_asistidas:'2',asistencia_cargada:'S'}];
     return new Response(JSON.stringify({records,numResults:records.length}));

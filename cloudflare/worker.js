@@ -1,5 +1,6 @@
 // Pages advanced-mode Worker. No passwords or attendance are persisted on the server.
-const BASE = 'https://alumnos.sapientia.uc.edu.py';
+const BASE = 'https://apialumnos.sapientia.uc.edu.py';
+const PORTAL_ORIGIN = 'https://alumnos.sapientia.uc.edu.py';
 const COOKIE = '__Host-asistencia';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -61,14 +62,18 @@ export class Portal {
     this.owner = 'Mi cuenta';
   }
   async request(path, body) {
-    let url = new URL(path, BASE), method = body ? 'POST' : 'GET';
+    let url = new URL('/api' + path, BASE), method = body ? 'POST' : 'GET';
     for (let hop = 0; hop < 8; hop++) {
       if (url.origin !== BASE) throw new AppError('El portal redirigió a otro sitio.', 502);
-      const requestHeaders = {'Accept':'application/json','X-Requested-With':'XMLHttpRequest','User-Agent':'MiAsistencia/1.0'};
+      const requestHeaders = {'Accept':'application/json','X-Requested-With':'XMLHttpRequest','User-Agent':'MiAsistencia/1.0',Origin:PORTAL_ORIGIN,Referer:PORTAL_ORIGIN+'/'};
       const now = Date.now();
       const eligible = this.cookies.filter(c => (!c.expires || c.expires > now) && (url.pathname === c.path || url.pathname.startsWith(c.path.endsWith('/') ? c.path : c.path + '/')));
       if (eligible.length) requestHeaders.Cookie = eligible.map(c => `${c.name}=${c.value}`).join('; ');
-      if (body) requestHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
+      if (body) {
+        requestHeaders['Content-Type'] = 'application/json';
+        const xsrf = eligible.find(c => c.name === 'XSRF-TOKEN');
+        if (xsrf) requestHeaders['X-XSRF-TOKEN'] = decodeURIComponent(xsrf.value);
+      }
       const response = await this.fetcher(url.toString(), {method, body, headers:requestHeaders, redirect:'manual', signal:AbortSignal.timeout(25000)});
       const cookies = response.headers.getSetCookie ? response.headers.getSetCookie() : response.headers.getAll('Set-Cookie');
       for (const raw of cookies) {
@@ -76,7 +81,7 @@ export class Portal {
         if (equal < 1) continue;
         const name = pair.slice(0,equal).trim(), value = pair.slice(equal+1).trim();
         const attributes = Object.fromEntries(attrs.map(a => { const i=a.indexOf('='); return i<0 ? [a.trim().toLowerCase(),true] : [a.slice(0,i).trim().toLowerCase(),a.slice(i+1).trim()]; }));
-        if (attributes.domain && !['alumnos.sapientia.uc.edu.py','sapientia.uc.edu.py','uc.edu.py'].includes(String(attributes.domain).replace(/^\./,''))) continue;
+        if (attributes.domain && !['apialumnos.sapientia.uc.edu.py','sapientia.uc.edu.py','uc.edu.py'].includes(String(attributes.domain).replace(/^\./,''))) continue;
         const cookiePath = typeof attributes.path === 'string' && attributes.path.startsWith('/') ? attributes.path : url.pathname.slice(0,url.pathname.lastIndexOf('/')+1) || '/';
         let expires = attributes.expires ? Date.parse(attributes.expires) : null;
         if (attributes['max-age'] !== undefined) expires = now + Number(attributes['max-age']) * 1000;
@@ -91,7 +96,12 @@ export class Portal {
         if ([301,302,303].includes(response.status)) { method = 'GET'; body = undefined; }
         continue;
       }
-      if (!response.ok) { await response.body?.cancel(); throw new AppError('Sapientia no está disponible. Probá nuevamente.',502); }
+      if (!response.ok) {
+        await response.body?.cancel();
+        if (response.status === 401 || response.status === 422) throw new AppError('Revisá tus credenciales o reconectá la sesión de Sapientia.',401);
+        if (response.status === 419) throw new AppError('La sesión de seguridad de Sapientia expiró. Volvé a conectar.',401);
+        throw new AppError('Sapientia no está disponible. Probá nuevamente.',502);
+      }
       const text = await response.text();
       if (text.length > 3000000) throw new AppError('La respuesta del portal es demasiado grande.',502);
       return text.replace(/^\uFEFF/, '');
@@ -99,10 +109,11 @@ export class Portal {
     throw new AppError('Demasiadas redirecciones de Sapientia.',502);
   }
   async login(username,password) {
-    await this.request('/');
-    const page = await this.request('/login/try',new URLSearchParams({'Credenciales[cedula]':username,'Credenciales[contrasenha]':password,preinsc:''}).toString());
-    const match = page.match(/var\s+usuario_logueado\s*=\s*("(?:[^"\\]|\\.)*")/);
-    if (match) { try { this.owner = decodeEntities(JSON.parse(match[1]).split(' - ')[0]).trim() || this.owner; } catch {} }
+    await this.request('/sanctum/csrf-cookie');
+    const result = JSON.parse(await this.request('/login/m-try',JSON.stringify({Credenciales:{cedula:username,contrasenha:password}})));
+    if (result.success !== true) throw new AppError('Sapientia no confirmó el inicio de sesión. Revisá tus credenciales.',401);
+    const profile = JSON.parse(await this.request('/personas/perfil/persona'));
+    this.owner = profile.datos?.nombre_apellido || profile.datos?.nombre_completo || [profile.datos?.nombre,profile.datos?.apellido].filter(Boolean).join(' ') || 'Mi cuenta';
     return this.catalog();
   }
   async fetchRows(path, params = {}) {
@@ -124,7 +135,7 @@ export class Portal {
     throw new AppError('No se pudo obtener el listado completo del portal.',502);
   }
   async catalog() {
-    const rows = await this.fetchRows('/cursos/cursos/current-index', {'p[limit]':100});
+    const rows = await this.fetchRows('/cursos/cursos/index', {'p[limit]':100});
     if (rows.some(r => !r.prg_curso_id)) throw new AppError('No se pudo identificar las materias de esta cuenta.',502);
     return rows;
   }
